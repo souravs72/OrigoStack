@@ -17,7 +17,13 @@ import {
   AccordionSummary,
   AccordionDetails,
 } from "@mui/material";
-import { ExpandMore, TrendingUp, Speed, Timer, People } from "@mui/icons-material";
+import {
+  ExpandMore,
+  TrendingUp,
+  Speed,
+  Timer,
+  People,
+} from "@mui/icons-material";
 import { Line } from "react-chartjs-2";
 import {
   LoadConfig,
@@ -32,7 +38,10 @@ interface LoadConfigProps {
   onChange: (config: LoadConfig) => void;
 }
 
-const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) => {
+const LoadConfigComponent: React.FC<LoadConfigProps> = ({
+  config,
+  onChange,
+}) => {
   const updateConfig = (field: keyof LoadConfig, value: any) => {
     onChange({ ...config, [field]: value });
   };
@@ -47,7 +56,9 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
     if (minutes >= 60) {
       const hours = Math.floor(minutes / 60);
       const remainingMinutes = minutes % 60;
-      return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+      return remainingMinutes > 0
+        ? `${hours}h ${remainingMinutes}m`
+        : `${hours}h`;
     }
     return `${minutes}m`;
   };
@@ -72,17 +83,24 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
           rps = config.minRps + (config.maxRps - config.minRps) * progress;
           break;
         case "exponential":
-          rps = config.minRps + (config.maxRps - config.minRps) * Math.pow(progress, 2);
+          rps =
+            config.minRps +
+            (config.maxRps - config.minRps) * Math.pow(progress, 2);
           break;
         case "logarithmic":
-          rps = progress === 0 
-            ? config.minRps 
-            : config.minRps + (config.maxRps - config.minRps) * Math.log10(1 + 9 * progress);
+          rps =
+            progress === 0
+              ? config.minRps
+              : config.minRps +
+                (config.maxRps - config.minRps) * Math.log10(1 + 9 * progress);
           break;
         case "spike":
           const midpoint = 0.5;
           const spikeWidth = 0.1;
-          if (progress >= midpoint - spikeWidth && progress <= midpoint + spikeWidth) {
+          if (
+            progress >= midpoint - spikeWidth &&
+            progress <= midpoint + spikeWidth
+          ) {
             rps = config.maxRps;
           } else {
             rps = config.maxRps * 0.1;
@@ -106,12 +124,17 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
               rps = config.minRps + (config.maxRps - config.minRps) * progress;
               break;
             case "logarithmic":
-              rps = progress === 0 
-                ? config.minRps 
-                : config.minRps + (config.maxRps - config.minRps) * Math.log10(1 + 9 * progress);
+              rps =
+                progress === 0
+                  ? config.minRps
+                  : config.minRps +
+                    (config.maxRps - config.minRps) *
+                      Math.log10(1 + 9 * progress);
               break;
             case "exponential":
-              rps = config.minRps + (config.maxRps - config.minRps) * Math.pow(progress, 3);
+              rps =
+                config.minRps +
+                (config.maxRps - config.minRps) * Math.pow(progress, 3);
               break;
             case "step":
               const steps = [1, 10, 100, 1000, 10000, 100000, 1000000];
@@ -180,7 +203,11 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
     },
   };
 
-  const loadPatterns: { value: LoadPattern; label: string; icon: React.ReactNode }[] = [
+  const loadPatterns: {
+    value: LoadPattern;
+    label: string;
+    icon: React.ReactNode;
+  }[] = [
     { value: "constant", label: "Constant Load", icon: <Speed /> },
     { value: "linear_ramp", label: "Linear Ramp", icon: <TrendingUp /> },
     { value: "exponential", label: "Exponential Growth", icon: <TrendingUp /> },
@@ -208,16 +235,22 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
         {/* Load Pattern Selection */}
         <Card variant="outlined">
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+            >
               <TrendingUp /> Load Pattern
             </Typography>
-            
+
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel>Load Pattern</InputLabel>
               <Select
                 value={config.pattern}
                 label="Load Pattern"
-                onChange={(e) => updateConfig("pattern", e.target.value as LoadPattern)}
+                onChange={(e) =>
+                  updateConfig("pattern", e.target.value as LoadPattern)
+                }
               >
                 {loadPatterns.map((pattern) => (
                   <MenuItem key={pattern.value} value={pattern.value}>
@@ -241,7 +274,9 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
                 <Select
                   value={config.scaleMode}
                   label="Scale Mode"
-                  onChange={(e) => updateConfig("scaleMode", e.target.value as ScaleMode)}
+                  onChange={(e) =>
+                    updateConfig("scaleMode", e.target.value as ScaleMode)
+                  }
                 >
                   {scaleModes.map((mode) => (
                     <MenuItem key={mode.value} value={mode.value}>
@@ -254,7 +289,8 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
 
             {config.pattern === "mega_scale" && (
               <Alert severity="warning" sx={{ mb: 2 }}>
-                <strong>Mega Scale Mode:</strong> {SCALE_MODE_DESCRIPTIONS[config.scaleMode]}
+                <strong>Mega Scale Mode:</strong>{" "}
+                {SCALE_MODE_DESCRIPTIONS[config.scaleMode]}
               </Alert>
             )}
 
@@ -268,7 +304,11 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
         {/* RPS Configuration */}
         <Card variant="outlined">
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+            >
               <Speed /> Request Rate Configuration
             </Typography>
 
@@ -290,7 +330,12 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
                 </Typography>
                 <Slider
                   value={Math.log10(Math.max(config.minRps, 1))}
-                  onChange={(_, value) => updateConfig("minRps", Math.round(Math.pow(10, value as number)))}
+                  onChange={(_, value) =>
+                    updateConfig(
+                      "minRps",
+                      Math.round(Math.pow(10, value as number))
+                    )
+                  }
                   min={0} // 10^0 = 1
                   max={7} // 10^7 = 10,000,000
                   step={0.1}
@@ -316,7 +361,12 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
                 </Typography>
                 <Slider
                   value={Math.log10(Math.max(config.maxRps, 1))}
-                  onChange={(_, value) => updateConfig("maxRps", Math.round(Math.pow(10, value as number)))}
+                  onChange={(_, value) =>
+                    updateConfig(
+                      "maxRps",
+                      Math.round(Math.pow(10, value as number))
+                    )
+                  }
                   min={0} // 10^0 = 1
                   max={7} // 10^7 = 10,000,000
                   step={0.1}
@@ -338,7 +388,9 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
               {/* Warning for high RPS */}
               {config.maxRps > 100000 && (
                 <Alert severity="warning">
-                  <strong>High Load Warning:</strong> Testing at {formatRPS(config.maxRps)} RPS may require significant system resources and could impact the target service.
+                  <strong>High Load Warning:</strong> Testing at{" "}
+                  {formatRPS(config.maxRps)} RPS may require significant system
+                  resources and could impact the target service.
                 </Alert>
               )}
             </Box>
@@ -348,7 +400,11 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
         {/* Timing Configuration */}
         <Card variant="outlined">
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+            >
               <Timer /> Timing Configuration
             </Typography>
 
@@ -357,22 +413,31 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
                 label="Test Duration"
                 type="number"
                 value={config.duration}
-                onChange={(e) => updateConfig("duration", parseInt(e.target.value) || 1)}
+                onChange={(e) =>
+                  updateConfig("duration", parseInt(e.target.value) || 1)
+                }
                 InputProps={{
-                  endAdornment: <InputAdornment position="end">minutes</InputAdornment>,
+                  endAdornment: (
+                    <InputAdornment position="end">minutes</InputAdornment>
+                  ),
                 }}
                 inputProps={{ min: 1, max: 1440 }}
                 helperText={`Total test time: ${formatDuration(config.duration)}`}
               />
 
-              {(config.pattern === "linear_ramp" || config.pattern === "exponential") && (
+              {(config.pattern === "linear_ramp" ||
+                config.pattern === "exponential") && (
                 <TextField
                   label="Ramp-up Time"
                   type="number"
                   value={config.rampUpTime}
-                  onChange={(e) => updateConfig("rampUpTime", parseInt(e.target.value) || 60)}
+                  onChange={(e) =>
+                    updateConfig("rampUpTime", parseInt(e.target.value) || 60)
+                  }
                   InputProps={{
-                    endAdornment: <InputAdornment position="end">seconds</InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">seconds</InputAdornment>
+                    ),
                   }}
                   inputProps={{ min: 1, max: config.duration * 60 }}
                   helperText="Time to reach maximum RPS"
@@ -385,7 +450,11 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
         {/* Concurrency Configuration */}
         <Card variant="outlined">
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              gutterBottom
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
+            >
               <People /> Concurrency Configuration
             </Typography>
 
@@ -393,7 +462,9 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
               label="Concurrent Users"
               type="number"
               value={config.concurrentUsers}
-              onChange={(e) => updateConfig("concurrentUsers", parseInt(e.target.value) || 1)}
+              onChange={(e) =>
+                updateConfig("concurrentUsers", parseInt(e.target.value) || 1)
+              }
               fullWidth
               inputProps={{ min: 1, max: 50000 }}
               helperText="Number of virtual users making concurrent requests"
@@ -409,19 +480,39 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
               <AccordionDetails>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   <Typography variant="body2">
-                    <Chip label="Light Load" size="small" color="success" sx={{ mr: 1 }} />
+                    <Chip
+                      label="Light Load"
+                      size="small"
+                      color="success"
+                      sx={{ mr: 1 }}
+                    />
                     1-50 users for basic functionality testing
                   </Typography>
                   <Typography variant="body2">
-                    <Chip label="Medium Load" size="small" color="warning" sx={{ mr: 1 }} />
+                    <Chip
+                      label="Medium Load"
+                      size="small"
+                      color="warning"
+                      sx={{ mr: 1 }}
+                    />
                     50-500 users for performance testing
                   </Typography>
                   <Typography variant="body2">
-                    <Chip label="Heavy Load" size="small" color="error" sx={{ mr: 1 }} />
+                    <Chip
+                      label="Heavy Load"
+                      size="small"
+                      color="error"
+                      sx={{ mr: 1 }}
+                    />
                     500+ users for stress testing
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                    Higher concurrency increases memory usage. Start with lower values and increase gradually.
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 1 }}
+                  >
+                    Higher concurrency increases memory usage. Start with lower
+                    values and increase gradually.
                   </Typography>
                 </Box>
               </AccordionDetails>
@@ -432,9 +523,11 @@ const LoadConfigComponent: React.FC<LoadConfigProps> = ({ config, onChange }) =>
         {/* Load Summary */}
         <Alert severity="success">
           <Typography variant="body2">
-            <strong>Load Summary:</strong> {config.concurrentUsers} concurrent users will generate{" "}
-            {formatRPS(config.minRps)} to {formatRPS(config.maxRps)} requests per second using a{" "}
-            {config.pattern.replace("_", " ")} pattern for {formatDuration(config.duration)}.
+            <strong>Load Summary:</strong> {config.concurrentUsers} concurrent
+            users will generate {formatRPS(config.minRps)} to{" "}
+            {formatRPS(config.maxRps)} requests per second using a{" "}
+            {config.pattern.replace("_", " ")} pattern for{" "}
+            {formatDuration(config.duration)}.
           </Typography>
         </Alert>
       </Box>

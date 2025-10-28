@@ -3,8 +3,10 @@ package simulator
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -24,28 +26,31 @@ type Engine struct {
 	wsHub            *websocket.Hub
 	authManager      *AuthManager
 	varResolver      *VariableResolver
+	validationEngine *ValidationEngine
 	activeSimulations sync.Map
 	simulationCounter int64
+	validationResults sync.Map // Store validation results by simulation ID
 }
 
 // SimulationConfig defines a performance test configuration
 type SimulationConfig struct {
-	ID               int64             `json:"id"`
-	Name             string            `json:"name"`
-	TargetURL        string            `json:"target_url"`
-	Method           string            `json:"method"`
-	Headers          map[string]string `json:"headers"`
-	Body             *RequestBody      `json:"body"`
-	Auth             *AuthConfig       `json:"auth"`
-	ContentType      string            `json:"content_type"`
-	MaxRPS           int64             `json:"max_rps"`           // Changed to int64 for millions of RPS
-	MinRPS           int64             `json:"min_rps"`           // Starting RPS (default: 1)
-	Duration         time.Duration     `json:"duration"`
-	ConcurrentUsers  int               `json:"concurrent_users"`
-	RampUpTime       time.Duration     `json:"ramp_up_time"`
-	Pattern          LoadPattern       `json:"pattern"`
-	ScaleMode        ScaleMode         `json:"scale_mode"`        // Linear, Logarithmic, Exponential
-	SampleInterval   time.Duration     `json:"sample_interval"`   // Time-series sampling rate
+	ID               int64                `json:"id"`
+	Name             string               `json:"name"`
+	TargetURL        string               `json:"target_url"`
+	Method           string               `json:"method"`
+	Headers          map[string]string    `json:"headers"`
+	Body             *RequestBody         `json:"body"`
+	Auth             *AuthConfig          `json:"auth"`
+	Validation       *ResponseValidation  `json:"validation,omitempty"`
+	ContentType      string               `json:"content_type"`
+	MaxRPS           int64                `json:"max_rps"`           // Changed to int64 for millions of RPS
+	MinRPS           int64                `json:"min_rps"`           // Starting RPS (default: 1)
+	Duration         time.Duration        `json:"duration"`
+	ConcurrentUsers  int                  `json:"concurrent_users"`
+	RampUpTime       time.Duration        `json:"ramp_up_time"`
+	Pattern          LoadPattern          `json:"pattern"`
+	ScaleMode        ScaleMode            `json:"scale_mode"`        // Linear, Logarithmic, Exponential
+	SampleInterval   time.Duration        `json:"sample_interval"`   // Time-series sampling rate
 }
 
 // LoadPattern defines different load generation patterns
@@ -111,6 +116,7 @@ func NewEngine(db *gorm.DB, metricsCollector *metrics.Collector, wsHub *websocke
 		wsHub:            wsHub,
 		authManager:      NewAuthManager(),
 		varResolver:      NewVariableResolver(),
+		validationEngine: NewValidationEngine(),
 		simulationCounter: 0,
 	}
 }
@@ -316,22 +322,62 @@ func (e *Engine) executeRequest(sim *Simulation, workerPool <-chan struct{}, wg 
 
 	if err != nil {
 		atomic.AddInt64(&sim.errorCount, 1)
+		// Record validation failure for network errors
+		e.recordValidationResult(sim, nil, responseTime, &ValidationResult{
+			Passed: false,
+			Errors: []ValidationError{{
+				Type:    "network",
+				Message: err.Error(),
+			}},
+			Duration: responseTime,
+		})
 		logrus.Debugf("Request failed: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	// Check response status
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	// Read response body for validation
+	responseBody, bodyReadErr := e.readResponseBody(resp)
+	if bodyReadErr != nil {
+		atomic.AddInt64(&sim.errorCount, 1)
+		logrus.Debugf("Failed to read response body: %v", bodyReadErr)
+		return
+	}
+
+	// Perform validation if configured
+	var validationResult *ValidationResult
+	if resolvedConfig.Validation != nil {
+		validationResult = e.validationEngine.ValidateResponse(resp, responseBody, resolvedConfig.Validation, responseTime)
+	} else {
+		// Default validation (status code only)
+		validationResult = &ValidationResult{
+			Passed:   resp.StatusCode >= 200 && resp.StatusCode < 300,
+			Duration: responseTime,
+		}
+		if !validationResult.Passed {
+			validationResult.Errors = []ValidationError{{
+				Type:     "status_code",
+				Expected: "2xx",
+				Actual:   fmt.Sprintf("%d", resp.StatusCode),
+				Message:  fmt.Sprintf("HTTP %d response", resp.StatusCode),
+			}}
+		}
+	}
+
+	// Update counters based on validation results
+	if validationResult.Passed {
 		atomic.AddInt64(&sim.successCount, 1)
 	} else {
 		atomic.AddInt64(&sim.errorCount, 1)
 	}
 
-	// Record response time
+	// Record response time and validation results
 	sim.mu.Lock()
 	sim.responseTimes = append(sim.responseTimes, responseTime)
 	sim.mu.Unlock()
+
+	// Store validation results for reporting
+	e.recordValidationResult(sim, resp, responseTime, validationResult)
 }
 
 // calculateTargetRPS determines the target RPS based on load pattern and elapsed time
@@ -611,6 +657,13 @@ func (e *Engine) validateConfig(config *SimulationConfig) error {
 		}
 	}
 
+	// Validate response validation configuration
+	if config.Validation != nil {
+		if err := e.validateValidationConfig(config.Validation); err != nil {
+			return fmt.Errorf("validation config failed: %v", err)
+		}
+	}
+
 	return nil
 }
 
@@ -657,6 +710,95 @@ func (e *Engine) validateAuth(auth *AuthConfig) error {
 		return fmt.Errorf("unsupported auth type: %s", auth.Type)
 	}
 	
+	return nil
+}
+
+// validateValidationConfig validates response validation configuration
+func (e *Engine) validateValidationConfig(validation *ResponseValidation) error {
+	// Validate custom assertions
+	if len(validation.Assertions) > 0 {
+		for _, assertion := range validation.Assertions {
+			if assertion.Name == "" {
+				return fmt.Errorf("assertion name is required")
+			}
+			if assertion.Script == "" {
+				return fmt.Errorf("assertion script is required for '%s'", assertion.Name)
+			}
+			
+			// Validate assertion syntax
+			if err := e.validationEngine.assertionEngine.ValidateAssertion(&assertion); err != nil {
+				return fmt.Errorf("assertion '%s' has invalid syntax: %v", assertion.Name, err)
+			}
+		}
+	}
+
+	// Validate body validation configuration
+	if validation.Body != nil {
+		if validation.Body.Type == "" {
+			return fmt.Errorf("body validation type is required")
+		}
+		
+		// Validate regex patterns
+		for _, regex := range validation.Body.Regex {
+			if regex.Pattern == "" {
+				return fmt.Errorf("regex pattern is required")
+			}
+			if _, err := regexp.Compile(regex.Pattern); err != nil {
+				return fmt.Errorf("invalid regex pattern '%s': %v", regex.Pattern, err)
+			}
+		}
+		
+		// Validate size constraints
+		if validation.Body.Size != nil {
+			if validation.Body.Size.Min != nil && *validation.Body.Size.Min < 0 {
+				return fmt.Errorf("minimum body size cannot be negative")
+			}
+			if validation.Body.Size.Max != nil && *validation.Body.Size.Max < 0 {
+				return fmt.Errorf("maximum body size cannot be negative")
+			}
+			if validation.Body.Size.Min != nil && validation.Body.Size.Max != nil {
+				if *validation.Body.Size.Min > *validation.Body.Size.Max {
+					return fmt.Errorf("minimum body size cannot be greater than maximum")
+				}
+			}
+		}
+
+		// Validate JSONPath expressions (basic validation)
+		for _, jsonPath := range validation.Body.JSONPath {
+			if jsonPath.Path == "" {
+				return fmt.Errorf("JSONPath expression is required")
+			}
+			if jsonPath.Operator == "" {
+				return fmt.Errorf("JSONPath operator is required for path '%s'", jsonPath.Path)
+			}
+			// Validate operator
+			validOperators := []string{"equals", "not_equals", "contains", "gt", "lt", "gte", "lte", "exists"}
+			validOperator := false
+			for _, op := range validOperators {
+				if jsonPath.Operator == op {
+					validOperator = true
+					break
+				}
+			}
+			if !validOperator {
+				return fmt.Errorf("invalid JSONPath operator '%s' for path '%s'", jsonPath.Operator, jsonPath.Path)
+			}
+		}
+	}
+
+	// Validate response time thresholds
+	if validation.ResponseTime != nil {
+		if validation.ResponseTime.MaxResponseTime <= 0 {
+			return fmt.Errorf("maximum response time must be positive")
+		}
+		if validation.ResponseTime.P95Threshold != 0 && validation.ResponseTime.P95Threshold <= 0 {
+			return fmt.Errorf("P95 threshold must be positive")
+		}
+		if validation.ResponseTime.P99Threshold != 0 && validation.ResponseTime.P99Threshold <= 0 {
+			return fmt.Errorf("P99 threshold must be positive")
+		}
+	}
+
 	return nil
 }
 
@@ -1280,5 +1422,135 @@ func (e *Engine) GetAvailableVariables(c *gin.Context) {
 			"In headers":      "X-Request-ID: {{uuid}}",
 			"Multiple vars":   "User {{username}} created at {{timestamp}}",
 		},
+	})
+}
+
+// readResponseBody reads the response body with size limits
+func (e *Engine) readResponseBody(resp *http.Response) ([]byte, error) {
+	// Limit response body size to prevent memory issues (10MB max)
+	const maxBodySize = 10 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxBodySize)
+	return io.ReadAll(limitedReader)
+}
+
+// recordValidationResult stores validation results for reporting and real-time monitoring
+func (e *Engine) recordValidationResult(sim *Simulation, resp *http.Response, responseTime time.Duration, validation *ValidationResult) {
+	// Create validation record
+	record := ValidationRecord{
+		SimulationID:     sim.config.ID,
+		Timestamp:        time.Now(),
+		ResponseTime:     responseTime,
+		ValidationResult: validation,
+	}
+
+	if resp != nil {
+		record.StatusCode = resp.StatusCode
+	}
+
+	// Store validation results in memory for this simulation
+	key := fmt.Sprintf("validation-%d", sim.config.ID)
+	if existing, ok := e.validationResults.Load(key); ok {
+		if records, ok := existing.([]ValidationRecord); ok {
+			// Keep only the last 1000 validation records per simulation to prevent memory bloat
+			if len(records) >= 1000 {
+				records = records[len(records)-999:]
+			}
+			records = append(records, record)
+			e.validationResults.Store(key, records)
+		}
+	} else {
+		e.validationResults.Store(key, []ValidationRecord{record})
+	}
+
+	// Broadcast validation failures via WebSocket for real-time monitoring
+	if !validation.Passed {
+		e.wsHub.Broadcast("validation_failure", map[string]interface{}{
+			"simulation_id": sim.config.ID,
+			"timestamp":     record.Timestamp,
+			"errors":        validation.Errors,
+			"response_time": responseTime.String(),
+			"status_code":   record.StatusCode,
+		})
+	}
+
+	// Log validation failures for debugging
+	if !validation.Passed {
+		logrus.Debugf("Validation failed for simulation %d: %d errors", sim.config.ID, len(validation.Errors))
+		for _, err := range validation.Errors {
+			logrus.Debugf("  - %s: %s", err.Type, err.Message)
+		}
+	}
+}
+
+// GetValidationResults returns validation results for a simulation
+func (e *Engine) GetValidationResults(c *gin.Context) {
+	simulationID := c.Param("id")
+	key := fmt.Sprintf("validation-%s", simulationID)
+	
+	if results, ok := e.validationResults.Load(key); ok {
+		if records, ok := results.([]ValidationRecord); ok {
+			c.JSON(http.StatusOK, gin.H{
+				"simulation_id": simulationID,
+				"total_records": len(records),
+				"results":       records,
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"simulation_id": simulationID,
+		"total_records": 0,
+		"results":       []ValidationRecord{},
+	})
+}
+
+// TestValidation tests validation rules against a sample response
+func (e *Engine) TestValidation(c *gin.Context) {
+	var testRequest struct {
+		Validation *ResponseValidation `json:"validation"`
+		TestData   struct {
+			StatusCode int               `json:"status_code"`
+			Headers    map[string]string `json:"headers"`
+			Body       string            `json:"body"`
+		} `json:"test_data"`
+	}
+
+	if err := c.ShouldBindJSON(&testRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid test request: " + err.Error()})
+		return
+	}
+
+	if testRequest.Validation == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation configuration is required"})
+		return
+	}
+
+	// Create mock HTTP response
+	mockResp := &http.Response{
+		StatusCode: testRequest.TestData.StatusCode,
+		Header:     make(http.Header),
+		Status:     fmt.Sprintf("%d %s", testRequest.TestData.StatusCode, http.StatusText(testRequest.TestData.StatusCode)),
+	}
+
+	// Set headers
+	for key, value := range testRequest.TestData.Headers {
+		mockResp.Header.Set(key, value)
+	}
+
+	// Test validation
+	testResponseTime := 100 * time.Millisecond // Mock response time
+	result := e.validationEngine.ValidateResponse(
+		mockResp,
+		[]byte(testRequest.TestData.Body),
+		testRequest.Validation,
+		testResponseTime,
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"validation_result": result,
+		"test_passed":       result.Passed,
+		"error_count":       len(result.Errors),
+		"warning_count":     len(result.Warnings),
 	})
 }

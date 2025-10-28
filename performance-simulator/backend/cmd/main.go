@@ -144,6 +144,10 @@ func setupRoutes(simEngine *simulator.Engine, wsHub *websocket.Hub, metricsColle
 		
 		// Variable management
 		api.GET("/variables", simEngine.GetAvailableVariables)
+		
+		// Validation endpoints
+		api.POST("/validation/test", simEngine.TestValidation)
+		api.GET("/validation/results/:id", simEngine.GetValidationResults)
 	}
 
 	// WebSocket endpoint for real-time data

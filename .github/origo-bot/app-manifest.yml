@@ -1,10 +1,10 @@
-# Atlas - Production Microservices Automation Bot
+# Origo - Production Microservices Automation Bot
 # Enterprise-grade GitHub App for Origo Stack platform
 
-name: "Atlas"
+name: "Origo"
 description: "Production-grade automation bot for Origo Stack microservices platform. Handles risk assessment, quality gates, canary deployments, and SLO monitoring."
 url: "https://github.com/souravs72/OrigoStack"
-setup_url: "https://github.com/souravs72/OrigoStack/wiki/Atlas-Bot-Setup"
+setup_url: "https://github.com/souravs72/OrigoStack/wiki/Origo-Bot-Setup"
 
 # Comprehensive permissions for production automation
 default_permissions:

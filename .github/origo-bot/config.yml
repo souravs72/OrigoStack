@@ -1,9 +1,9 @@
-# Atlas Bot Configuration - Production Automation
+# Origo Bot Configuration - Production Automation
 # Implements all requirements from .cursor/rules.md
 
-atlas:
+origo:
   version: "1.0.0"
-  name: "Atlas"
+  name: "Origo"
   description: "Enterprise automation for Origo Stack microservices platform"
   
   # Risk-based automation per rules.md

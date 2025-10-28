@@ -125,6 +125,7 @@ Before altering any file, the agent **must** perform these steps in order and re
 - **Write** commits as imperative messages: `Add`, `Fix`, `Refactor`, `Remove`.
 - **Include** a concise PR template: summary, testing done, rollout plan, risk, related tickets, impact analysis.
 - **Require** signed commits for production merges (GPG or commit signing via CI).
+- **Never** use emojis or icons in any code, documentation, comments, commit messages, or automation. This is a professional production repository - use clear, descriptive text instead.
 
 ---
 

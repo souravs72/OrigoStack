@@ -3,18 +3,25 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { simulatorActions } from "../../stores/simulatorStore";
 
-// Mock socket.io-client
-vi.mock("socket.io-client", () => ({
-  io: vi.fn(() => ({
-    on: vi.fn(),
-    emit: vi.fn(),
-    disconnect: vi.fn(),
-    connected: true,
-  })),
-}));
+// Mock native WebSocket
+global.WebSocket = vi.fn(() => ({
+  close: vi.fn(),
+  send: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  readyState: WebSocket.CONNECTING,
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3,
+})) as any;
 
-// Mock react-hot-toast
+// Mock react-hot-toast with default export
 vi.mock("react-hot-toast", () => ({
+  default: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
   success: vi.fn(),
   error: vi.fn(),
 }));

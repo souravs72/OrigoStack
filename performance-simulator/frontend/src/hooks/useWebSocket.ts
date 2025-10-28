@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import toast from "react-hot-toast";
 import { simulatorActions } from "../stores/simulatorStore";
 
@@ -60,102 +59,136 @@ export const useWebSocket = (
   ping: () => void;
   getStatus: () => void;
 } => {
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
+  const isConnectedRef = useRef(false);
 
   const connect = useCallback((): void => {
     try {
       // Clean up existing connection
       if (socketRef.current) {
-        socketRef.current.disconnect();
+        socketRef.current.close();
       }
 
+      // Convert HTTP URL to WebSocket URL and add /ws endpoint if not already present
+      let wsUrl = url.replace(/^http/, "ws").replace(/\/$/, "");
+      if (!wsUrl.endsWith("/ws")) {
+        wsUrl += "/ws";
+      }
+
+      console.log("Connecting to WebSocket:", wsUrl);
+
       // Create new WebSocket connection
-      socketRef.current = io(url, {
-        transports: ["websocket"],
-        timeout: 20000,
-        forceNew: true,
-      });
+      socketRef.current = new WebSocket(wsUrl);
 
       const socket = socketRef.current;
 
       // Connection event handlers
-      socket.on("connect", () => {
+      socket.onopen = () => {
         console.log("WebSocket connected successfully");
         reconnectAttempts.current = 0;
+        isConnectedRef.current = true;
         simulatorActions.setConnectionStatus("connected");
         toast.success("Connected to Performance Simulator");
-      });
+      };
 
-      socket.on("disconnect", (reason) => {
-        console.log("WebSocket disconnected:", reason);
+      socket.onclose = (event) => {
+        console.log("WebSocket disconnected:", event.code, event.reason);
+        isConnectedRef.current = false;
         simulatorActions.setConnectionStatus("disconnected");
 
-        if (reason === "io server disconnect") {
-          // Server initiated disconnect, try to reconnect
+        if (!event.wasClean) {
+          // Unexpected disconnect, try to reconnect
           attemptReconnect();
         }
-      });
+      };
 
-      socket.on("connect_error", (error) => {
+      socket.onerror = (error) => {
         console.error("WebSocket connection error:", error);
+        isConnectedRef.current = false;
         simulatorActions.setConnectionStatus("error");
         attemptReconnect();
-      });
+      };
 
-      // Message handlers
-      socket.on("simulation_started", (data: unknown) => {
-        console.log("Simulation started:", data);
-        if (isSimulationData(data)) {
-          simulatorActions.addActiveSimulation(data as any);
-          toast.success(
-            `Simulation "${data.config?.name || "Unknown"}" started`
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          // Handle different message types based on the backend WebSocket implementation
+          switch (message.type) {
+            case "simulation_started":
+              console.log("Simulation started:", message.data);
+              if (isSimulationData(message.data)) {
+                simulatorActions.addActiveSimulation(message.data as any);
+                toast.success(
+                  `Simulation "${message.data.config?.name || "Unknown"}" started`
+                );
+              }
+              break;
+
+            case "simulation_update":
+              if (isSimulationUpdateData(message.data)) {
+                simulatorActions.updateSimulationMetrics(
+                  message.data.simulation_id,
+                  message.data.metrics as any
+                );
+              }
+              break;
+
+            case "simulation_completed":
+              console.log("Simulation completed:", message.data);
+              if (isSimulationCompletedData(message.data)) {
+                simulatorActions.completeSimulation(
+                  message.data.simulation_id,
+                  message.data.results
+                );
+                toast.success(
+                  `Simulation "${message.data.results?.name || "Unknown"}" completed`
+                );
+              }
+              break;
+
+            case "metrics_update":
+              if (isMetricsData(message.data)) {
+                simulatorActions.updateRealTimeMetrics(message.data as any);
+              }
+              break;
+
+            case "error":
+              console.error("Simulator error:", message.data);
+              if (isErrorData(message.data)) {
+                toast.error(`Error: ${message.data.message}`);
+              }
+              break;
+
+            case "connection_established":
+              console.log("Connection established:", message.data);
+              if (isConnectionData(message.data)) {
+                simulatorActions.setClientId(message.data.client_id);
+              }
+              break;
+
+            case "pong":
+              // Handle ping response
+              console.log("Received pong from server");
+              break;
+
+            default:
+              console.log("Unknown message type:", message.type, message.data);
+          }
+        } catch (error) {
+          console.error(
+            "Failed to parse WebSocket message:",
+            error,
+            event.data
           );
         }
-      });
-
-      socket.on("simulation_update", (data: unknown) => {
-        if (isSimulationUpdateData(data)) {
-          simulatorActions.updateSimulationMetrics(
-            data.simulation_id,
-            data.metrics as any
-          );
-        }
-      });
-
-      socket.on("simulation_completed", (data: unknown) => {
-        console.log("Simulation completed:", data);
-        if (isSimulationCompletedData(data)) {
-          simulatorActions.completeSimulation(data.simulation_id, data.results);
-          toast.success(
-            `Simulation "${data.results?.name || "Unknown"}" completed`
-          );
-        }
-      });
-
-      socket.on("metrics_update", (data: unknown) => {
-        if (isMetricsData(data)) {
-          simulatorActions.updateRealTimeMetrics(data as any);
-        }
-      });
-
-      socket.on("error", (data: unknown) => {
-        console.error("Simulator error:", data);
-        if (isErrorData(data)) {
-          toast.error(`Error: ${data.message}`);
-        }
-      });
-
-      socket.on("connection_established", (data: unknown) => {
-        console.log("Connection established:", data);
-        if (isConnectionData(data)) {
-          simulatorActions.setClientId(data.client_id);
-        }
-      });
+      };
     } catch (error) {
       console.error("Failed to create WebSocket connection:", error);
+      isConnectedRef.current = false;
       simulatorActions.setConnectionStatus("error");
       attemptReconnect();
     }
@@ -190,16 +223,18 @@ export const useWebSocket = (
     }
 
     if (socketRef.current) {
-      socketRef.current.disconnect();
+      socketRef.current.close();
       socketRef.current = null;
     }
 
+    isConnectedRef.current = false;
     simulatorActions.setConnectionStatus("disconnected");
   }, []);
 
   const sendMessage = useCallback((type: string, data: unknown): void => {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit(type, data);
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      const message = JSON.stringify({ type, data });
+      socketRef.current.send(message);
     } else {
       console.warn("WebSocket not connected, message not sent:", {
         type,
@@ -238,7 +273,10 @@ export const useWebSocket = (
 
     // Set up ping interval to keep connection alive
     const pingInterval = setInterval(() => {
-      if (socketRef.current && socketRef.current.connected) {
+      if (
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN
+      ) {
         ping();
       }
     }, 30000); // Ping every 30 seconds
@@ -267,7 +305,7 @@ export const useWebSocket = (
   ]);
 
   return {
-    isConnected: socketRef.current?.connected || false,
+    isConnected: isConnectedRef.current,
     sendMessage,
     subscribeToSimulation,
     unsubscribeFromSimulation,

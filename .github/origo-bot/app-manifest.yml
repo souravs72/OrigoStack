@@ -1,7 +1,7 @@
 # Origo - Production Microservices Automation Bot
 # Enterprise-grade GitHub App for Origo Stack platform
 
-name: "Origo"
+name: "sourav72"
 description: "Production-grade automation bot for Origo Stack microservices platform. Handles risk assessment, quality gates, canary deployments, and SLO monitoring."
 url: "https://github.com/souravs72/OrigoStack"
 setup_url: "https://github.com/souravs72/OrigoStack/wiki/Origo-Bot-Setup"

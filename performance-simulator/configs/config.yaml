@@ -1,0 +1,122 @@
+server:
+  port: 8080
+  host: "0.0.0.0"
+
+database:
+  path: "performance_simulator.db"
+
+logging:
+  level: "info"
+  format: "json"
+
+# Service profiles for testing different components of Origo Stack
+service_profiles:
+  auth_service:
+    name: "Authentication Service"
+    technology: "Spring Boot (Java)"
+    base_url: "http://localhost:8081"
+    endpoints:
+      - path: "/api/auth/login"
+        method: "POST"
+      - path: "/api/auth/validate"
+        method: "GET"
+      - path: "/api/auth/refresh"
+        method: "POST"
+    expected_rps: 12000
+    expected_p95_latency: "150ms"
+
+  control_plane:
+    name: "Control Plane Service"
+    technology: "Go (Gin)"
+    base_url: "http://localhost:8082"
+    endpoints:
+      - path: "/api/rooms"
+        method: "GET"
+      - path: "/api/rooms"
+        method: "POST"
+      - path: "/api/rooms/{id}/join"
+        method: "POST"
+    expected_rps: 45000
+    expected_p95_latency: "50ms"
+
+  chat_service:
+    name: "Chat Service"
+    technology: "Go (NATS)"
+    base_url: "http://localhost:8083"
+    endpoints:
+      - path: "/api/chat/messages"
+        method: "GET"
+      - path: "/api/chat/messages"
+        method: "POST"
+      - path: "/api/chat/presence"
+        method: "GET"
+    expected_rps: 40000
+    expected_p95_latency: "30ms"
+
+  notification_service:
+    name: "Notification Service"
+    technology: "Go (Gin)"
+    base_url: "http://localhost:8084"
+    endpoints:
+      - path: "/api/notifications/send"
+        method: "POST"
+      - path: "/api/notifications/webhook"
+        method: "POST"
+    expected_rps: 35000
+    expected_p95_latency: "80ms"
+
+  billing_service:
+    name: "Billing Service"
+    technology: "Spring Boot (Java)"
+    base_url: "http://localhost:8085"
+    endpoints:
+      - path: "/api/billing/usage"
+        method: "POST"
+      - path: "/api/billing/plans"
+        method: "GET"
+      - path: "/api/billing/invoices"
+        method: "GET"
+    expected_rps: 15000
+    expected_p95_latency: "200ms"
+
+# Default simulation configurations
+simulation_presets:
+  quick_test:
+    name: "Quick Performance Test"
+    duration: "30s"
+    max_rps: 1000
+    concurrent_users: 50
+    pattern: "linear_ramp"
+    ramp_up_time: "10s"
+
+  stress_test:
+    name: "Stress Test"
+    duration: "5m"
+    max_rps: 10000
+    concurrent_users: 500
+    pattern: "linear_ramp"
+    ramp_up_time: "1m"
+
+  spike_test:
+    name: "Spike Test"
+    duration: "2m"
+    max_rps: 50000
+    concurrent_users: 1000
+    pattern: "spike"
+    ramp_up_time: "30s"
+
+  endurance_test:
+    name: "Endurance Test"
+    duration: "30m"
+    max_rps: 5000
+    concurrent_users: 200
+    pattern: "constant"
+    ramp_up_time: "2m"
+
+  comparison_test:
+    name: "Service Comparison Test"
+    duration: "3m"
+    max_rps: 20000
+    concurrent_users: 300
+    pattern: "linear_ramp"
+    ramp_up_time: "1m"

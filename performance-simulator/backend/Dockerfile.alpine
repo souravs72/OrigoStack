@@ -1,0 +1,24 @@
+FROM alpine:3.18
+
+# Install Go and build dependencies
+RUN apk add --no-cache go ca-certificates tzdata git
+
+# Set working directory
+WORKDIR /app
+
+# Set Go environment
+ENV GOPATH=/go
+ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+
+# Copy source code
+COPY . .
+
+# Download dependencies and build
+RUN go mod download && \
+    CGO_ENABLED=0 go build -o main cmd/main.go
+
+# Expose port
+EXPOSE 8080
+
+# Run the application
+CMD ["/app/main"]

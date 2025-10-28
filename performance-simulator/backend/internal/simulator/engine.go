@@ -411,14 +411,21 @@ func (tsm *TimeSeriesMetrics) AddPoint(point TimeSeriesPoint) {
 	}
 }
 
-// GetPointsSince returns points since a specific timestamp
+// GetPointsSince returns all points since a given time
 func (tsm *TimeSeriesMetrics) GetPointsSince(since time.Time) []TimeSeriesPoint {
 	tsm.mu.RLock()
 	defer tsm.mu.RUnlock()
 	
+	if since.IsZero() {
+		// Return all points if no time specified
+		result := make([]TimeSeriesPoint, len(tsm.Points))
+		copy(result, tsm.Points)
+		return result
+	}
+	
 	var result []TimeSeriesPoint
 	for _, point := range tsm.Points {
-		if point.Timestamp.After(since) {
+		if point.Timestamp.After(since) || point.Timestamp.Equal(since) {
 			result = append(result, point)
 		}
 	}
@@ -643,41 +650,308 @@ func (e *Engine) saveSimulationToDB(sim *Simulation) {
 
 // Additional handler methods for REST API endpoints
 func (e *Engine) ListSimulations(c *gin.Context) {
-	// Implementation to list all simulations
-	c.JSON(http.StatusOK, gin.H{"message": "List simulations endpoint"})
+	var simulations []map[string]interface{}
+	
+	// Get active simulations
+	e.activeSimulations.Range(func(key, value interface{}) bool {
+		sim := value.(*Simulation)
+		simData := map[string]interface{}{
+			"id":               sim.status.ID,
+			"name":            sim.status.Name,
+			"status":          sim.status.Status,
+			"start_time":      sim.status.StartTime,
+			"total_requests":  sim.status.TotalRequests,
+			"successful_reqs": sim.status.SuccessfulReqs,
+			"failed_requests": sim.status.FailedRequests,
+			"current_rps":     sim.status.CurrentRPS,
+			"config":          sim.config,
+		}
+		simulations = append(simulations, simData)
+		return true
+	})
+	
+	c.JSON(http.StatusOK, gin.H{
+		"simulations": simulations,
+		"total":       len(simulations),
+	})
 }
 
 func (e *Engine) GetSimulation(c *gin.Context) {
-	// Implementation to get specific simulation
-	c.JSON(http.StatusOK, gin.H{"message": "Get simulation endpoint"})
+	simulationID := c.Param("id")
+	
+	if simValue, exists := e.activeSimulations.Load(simulationID); exists {
+		sim := simValue.(*Simulation)
+		
+		// Get time-series data
+		timeSeriesPoints := sim.timeSeries.GetPointsSince(time.Time{})
+		
+		simData := map[string]interface{}{
+			"id":               sim.status.ID,
+			"name":            sim.status.Name,
+			"status":          sim.status.Status,
+			"start_time":      sim.status.StartTime,
+			"total_requests":  sim.status.TotalRequests,
+			"successful_reqs": sim.status.SuccessfulReqs,
+			"failed_requests": sim.status.FailedRequests,
+			"current_rps":     sim.status.CurrentRPS,
+			"config":          sim.config,
+			"time_series":     timeSeriesPoints,
+			"response_times":  sim.status.ResponseTimes,
+		}
+		
+		c.JSON(http.StatusOK, simData)
+		return
+	}
+	
+	c.JSON(http.StatusNotFound, gin.H{"error": "Simulation not found"})
 }
 
 func (e *Engine) StopSimulation(c *gin.Context) {
-	// Implementation to stop running simulation
-	c.JSON(http.StatusOK, gin.H{"message": "Stop simulation endpoint"})
+	simulationID := c.Param("id")
+	
+	if simValue, exists := e.activeSimulations.Load(simulationID); exists {
+		sim := simValue.(*Simulation)
+		
+		// Cancel the simulation context
+		sim.cancel()
+		
+		// Update status
+		sim.mu.Lock()
+		sim.status.Status = "stopped"
+		endTime := time.Now()
+		sim.status.EndTime = &endTime
+		sim.mu.Unlock()
+		
+		// Remove from active simulations
+		e.activeSimulations.Delete(simulationID)
+		
+		// Broadcast stop event
+		e.wsHub.Broadcast("simulation_stopped", gin.H{
+			"simulation_id": simulationID,
+			"status":        "stopped",
+			"end_time":      endTime,
+		})
+		
+		c.JSON(http.StatusOK, gin.H{
+			"message":       "Simulation stopped successfully",
+			"simulation_id": simulationID,
+			"status":        "stopped",
+		})
+		return
+	}
+	
+	c.JSON(http.StatusNotFound, gin.H{"error": "Simulation not found"})
 }
 
 func (e *Engine) DeleteSimulation(c *gin.Context) {
-	// Implementation to delete simulation
-	c.JSON(http.StatusOK, gin.H{"message": "Delete simulation endpoint"})
+	simulationID := c.Param("id")
+	
+	// First try to stop if running
+	if simValue, exists := e.activeSimulations.Load(simulationID); exists {
+		sim := simValue.(*Simulation)
+		sim.cancel()
+		e.activeSimulations.Delete(simulationID)
+	}
+	
+	// TODO: Delete from database if implemented
+	// db.Where("id = ?", simulationID).Delete(&Simulation{})
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Simulation deleted successfully",
+		"simulation_id": simulationID,
+	})
 }
 
 func (e *Engine) GetConfigurations(c *gin.Context) {
-	// Implementation to get saved configurations
-	c.JSON(http.StatusOK, gin.H{"message": "Get configurations endpoint"})
+	// Return predefined configuration templates
+	configurations := map[string]SimulationConfig{
+		"light_load": {
+			Name:             "Light Load Test",
+			MinRPS:           1,
+			MaxRPS:           100,
+			Duration:         2 * time.Minute,
+			ConcurrentUsers:  10,
+			Pattern:          PatternLinearRamp,
+			ScaleMode:        ScaleModeLinear,
+			SampleInterval:   1 * time.Second,
+		},
+		"medium_load": {
+			Name:             "Medium Load Test",
+			MinRPS:           10,
+			MaxRPS:           1000,
+			Duration:         5 * time.Minute,
+			ConcurrentUsers:  50,
+			Pattern:          PatternLinearRamp,
+			ScaleMode:        ScaleModeLinear,
+			SampleInterval:   1 * time.Second,
+		},
+		"heavy_load": {
+			Name:             "Heavy Load Test",
+			MinRPS:           100,
+			MaxRPS:           10000,
+			Duration:         10 * time.Minute,
+			ConcurrentUsers:  500,
+			Pattern:          PatternExponential,
+			ScaleMode:        ScaleModeExponential,
+			SampleInterval:   500 * time.Millisecond,
+		},
+		"stress_test": {
+			Name:             "Stress Test",
+			MinRPS:           1000,
+			MaxRPS:           50000,
+			Duration:         15 * time.Minute,
+			ConcurrentUsers:  2000,
+			Pattern:          PatternMegaScale,
+			ScaleMode:        ScaleModeLogarithmic,
+			SampleInterval:   500 * time.Millisecond,
+		},
+	}
+	
+	c.JSON(http.StatusOK, configurations)
 }
 
 func (e *Engine) SaveConfiguration(c *gin.Context) {
-	// Implementation to save configuration
-	c.JSON(http.StatusOK, gin.H{"message": "Save configuration endpoint"})
+	var config SimulationConfig
+	if err := c.ShouldBindJSON(&config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid configuration: " + err.Error()})
+		return
+	}
+	
+	// Validate configuration
+	if err := e.validateConfig(&config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Configuration validation failed: " + err.Error()})
+		return
+	}
+	
+	// TODO: Save to database in production
+	// For now, just return success
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Configuration saved successfully",
+		"config":  config,
+	})
 }
 
 func (e *Engine) GetServiceProfiles(c *gin.Context) {
-	// Implementation to get service profiles
-	c.JSON(http.StatusOK, gin.H{"message": "Get service profiles endpoint"})
+	// Return Origo Stack service profiles for testing
+	serviceProfiles := map[string]interface{}{
+		"auth_service": map[string]interface{}{
+			"name":        "Authentication Service (Java)",
+			"technology":  "Spring Boot",
+			"base_url":    "http://localhost:8081",
+			"endpoints": []map[string]string{
+				{"path": "/api/auth/login", "method": "POST"},
+				{"path": "/api/auth/validate", "method": "GET"},
+				{"path": "/api/auth/refresh", "method": "POST"},
+				{"path": "/api/users/profile", "method": "GET"},
+			},
+			"expected_rps":        12000,
+			"expected_p95_latency": "150ms",
+			"characteristics": map[string]string{
+				"type":        "CPU-intensive",
+				"bottleneck":  "JWT processing",
+				"scaling":     "Horizontal",
+			},
+		},
+		"control_plane": map[string]interface{}{
+			"name":        "Control Plane Service (Go)",
+			"technology":  "Go + Gin",
+			"base_url":    "http://localhost:8082",
+			"endpoints": []map[string]string{
+				{"path": "/api/rooms", "method": "GET"},
+				{"path": "/api/rooms", "method": "POST"},
+				{"path": "/api/rooms/{id}/join", "method": "POST"},
+				{"path": "/api/rooms/{id}/leave", "method": "POST"},
+			},
+			"expected_rps":        45000,
+			"expected_p95_latency": "50ms",
+			"characteristics": map[string]string{
+				"type":        "High-throughput",
+				"bottleneck":  "Database connections",
+				"scaling":     "Horizontal + Vertical",
+			},
+		},
+		"chat_service": map[string]interface{}{
+			"name":        "Chat Service (Go)",
+			"technology":  "Go + NATS",
+			"base_url":    "http://localhost:8083",
+			"endpoints": []map[string]string{
+				{"path": "/api/chat/messages", "method": "GET"},
+				{"path": "/api/chat/messages", "method": "POST"},
+				{"path": "/api/chat/rooms/{id}/messages", "method": "GET"},
+				{"path": "/api/chat/presence", "method": "GET"},
+			},
+			"expected_rps":        40000,
+			"expected_p95_latency": "30ms",
+			"characteristics": map[string]string{
+				"type":        "Real-time messaging",
+				"bottleneck":  "Message queue throughput",
+				"scaling":     "Horizontal",
+			},
+		},
+		"notification_service": map[string]interface{}{
+			"name":        "Notification Service (Go)",
+			"technology":  "Go + Gin",
+			"base_url":    "http://localhost:8084",
+			"endpoints": []map[string]string{
+				{"path": "/api/notifications/send", "method": "POST"},
+				{"path": "/api/notifications/bulk", "method": "POST"},
+				{"path": "/api/notifications/webhook", "method": "POST"},
+				{"path": "/api/notifications/status", "method": "GET"},
+			},
+			"expected_rps":        35000,
+			"expected_p95_latency": "80ms",
+			"characteristics": map[string]string{
+				"type":        "I/O intensive",
+				"bottleneck":  "External API calls",
+				"scaling":     "Horizontal",
+			},
+		},
+		"billing_service": map[string]interface{}{
+			"name":        "Billing Service (Java)",
+			"technology":  "Spring Boot + JPA",
+			"base_url":    "http://localhost:8085",
+			"endpoints": []map[string]string{
+				{"path": "/api/billing/usage", "method": "POST"},
+				{"path": "/api/billing/plans", "method": "GET"},
+				{"path": "/api/billing/invoices", "method": "GET"},
+				{"path": "/api/billing/payment", "method": "POST"},
+			},
+			"expected_rps":        15000,
+			"expected_p95_latency": "200ms",
+			"characteristics": map[string]string{
+				"type":        "Transaction-heavy",
+				"bottleneck":  "Database transactions",
+				"scaling":     "Vertical + Database optimization",
+			},
+		},
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"service_profiles": serviceProfiles,
+		"total":           len(serviceProfiles),
+	})
 }
 
 func (e *Engine) CreateServiceProfile(c *gin.Context) {
-	// Implementation to create service profile
-	c.JSON(http.StatusOK, gin.H{"message": "Create service profile endpoint"})
+	var profile map[string]interface{}
+	if err := c.ShouldBindJSON(&profile); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid service profile: " + err.Error()})
+		return
+	}
+	
+	// Validate required fields
+	requiredFields := []string{"name", "technology", "base_url"}
+	for _, field := range requiredFields {
+		if _, exists := profile[field]; !exists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Missing required field: %s", field)})
+			return
+		}
+	}
+	
+	// TODO: Save to database in production
+	// For now, just return success
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Service profile created successfully",
+		"profile": profile,
+	})
 }

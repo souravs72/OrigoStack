@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Professional gradient scheme -->
+    <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Secondary gradient for accents -->
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#10b981;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Subtle glow effect -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Professional shadow -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.25)"/>
+    </filter>
+  </defs>
+  
+  <!-- Background circle with gradient -->
+  <circle cx="128" cy="128" r="118" fill="url(#primaryGradient)" filter="url(#shadow)" opacity="0.95"/>
+  
+  <!-- Outer ring -->
+  <circle cx="128" cy="128" r="118" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+  
+  <!-- Main bot head structure -->
+  <g transform="translate(128,128)">
+    
+    <!-- Bot head -->
+    <rect x="-45" y="-55" width="90" height="70" rx="12" ry="12" fill="rgba(255,255,255,0.95)" filter="url(#shadow)"/>
+    
+    <!-- Screen/face area -->
+    <rect x="-35" y="-45" width="70" height="50" rx="8" ry="8" fill="#1f2937"/>
+    
+    <!-- Eyes/status indicators -->
+    <circle cx="-18" cy="-30" r="8" fill="url(#accentGradient)" filter="url(#glow)"/>
+    <circle cx="18" cy="-30" r="8" fill="url(#accentGradient)" filter="url(#glow)"/>
+    
+    <!-- Eye highlights -->
+    <circle cx="-18" cy="-32" r="3" fill="rgba(255,255,255,0.8)"/>
+    <circle cx="18" cy="-32" r="3" fill="rgba(255,255,255,0.8)"/>
+    
+    <!-- Data visualization bars -->
+    <g opacity="0.7">
+      <rect x="-25" y="-10" width="4" height="12" fill="url(#accentGradient)"/>
+      <rect x="-18" y="-15" width="4" height="17" fill="url(#accentGradient)"/>
+      <rect x="-11" y="-8" width="4" height="10" fill="url(#accentGradient)"/>
+      <rect x="-4" y="-12" width="4" height="14" fill="url(#accentGradient)"/>
+      <rect x="3" y="-9" width="4" height="11" fill="url(#accentGradient)"/>
+      <rect x="10" y="-14" width="4" height="16" fill="url(#accentGradient)"/>
+      <rect x="17" y="-11" width="4" height="13" fill="url(#accentGradient)"/>
+    </g>
+    
+    <!-- Bot body/chest -->
+    <rect x="-35" y="25" width="70" height="45" rx="8" ry="8" fill="rgba(255,255,255,0.9)" filter="url(#shadow)"/>
+    
+    <!-- Control panel -->
+    <rect x="-25" y="35" width="50" height="25" rx="4" ry="4" fill="#374151"/>
+    
+    <!-- Status LEDs -->
+    <circle cx="-15" cy="42" r="3" fill="#ef4444"/>
+    <circle cx="-5" cy="42" r="3" fill="#f59e0b"/>
+    <circle cx="5" cy="42" r="3" fill="url(#accentGradient)"/>
+    <circle cx="15" cy="42" r="3" fill="url(#accentGradient)"/>
+    
+    <!-- Network connection lines -->
+    <g stroke="rgba(255,255,255,0.6)" stroke-width="2" fill="none">
+      <!-- Horizontal connections -->
+      <line x1="-80" y1="-20" x2="-45" y2="-20"/>
+      <line x1="45" y1="-20" x2="80" y2="-20"/>
+      <line x1="-80" y1="20" x2="-35" y2="20"/>
+      <line x1="35" y1="20" x2="80" y2="20"/>
+      
+      <!-- Vertical connections -->
+      <line x1="-20" y1="-85" x2="-20" y2="-55"/>
+      <line x1="20" y1="-85" x2="20" y2="-55"/>
+      <line x1="0" y1="70" x2="0" y2="90"/>
+    </g>
+    
+    <!-- Network nodes -->
+    <g fill="rgba(255,255,255,0.8)">
+      <circle cx="-80" cy="-20" r="4"/>
+      <circle cx="80" cy="-20" r="4"/>
+      <circle cx="-80" cy="20" r="4"/>
+      <circle cx="80" cy="20" r="4"/>
+      <circle cx="-20" cy="-85" r="4"/>
+      <circle cx="20" cy="-85" r="4"/>
+      <circle cx="0" cy="90" r="4"/>
+    </g>
+    
+    <!-- Microservices pods -->
+    <g fill="url(#accentGradient)" opacity="0.8">
+      <rect x="-85" y="-25" width="8" height="8" rx="2"/>
+      <rect x="77" y="-25" width="8" height="8" rx="2"/>
+      <rect x="-85" y="15" width="8" height="8" rx="2"/>
+      <rect x="77" y="15" width="8" height="8" rx="2"/>
+      <rect x="-25" y="-90" width="8" height="8" rx="2"/>
+      <rect x="15" y="-90" width="8" height="8" rx="2"/>
+      <rect x="-5" y="85" width="8" height="8" rx="2"/>
+    </g>
+    
+    <!-- Automation symbols -->
+    <g stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none">
+      <!-- Gear 1 -->
+      <g transform="translate(-60,-60) scale(0.8)">
+        <circle cx="0" cy="0" r="12"/>
+        <circle cx="0" cy="0" r="6"/>
+        <rect x="-2" y="-16" width="4" height="8"/>
+        <rect x="-2" y="8" width="4" height="8"/>
+        <rect x="-16" y="-2" width="8" height="4"/>
+        <rect x="8" y="-2" width="8" height="4"/>
+      </g>
+      
+      <!-- Gear 2 -->
+      <g transform="translate(60,-60) scale(0.8)">
+        <circle cx="0" cy="0" r="12"/>
+        <circle cx="0" cy="0" r="6"/>
+        <rect x="-2" y="-16" width="4" height="8"/>
+        <rect x="-2" y="8" width="4" height="8"/>
+        <rect x="-16" y="-2" width="8" height="4"/>
+        <rect x="8" y="-2" width="8" height="4"/>
+      </g>
+    </g>
+    
+    <!-- Data flow arrows -->
+    <g stroke="url(#accentGradient)" stroke-width="2" fill="url(#accentGradient)" opacity="0.6">
+      <path d="M -65,-40 L -55,-35 L -65,-30 L -60,-35 Z"/>
+      <path d="M 55,-40 L 65,-35 L 55,-30 L 60,-35 Z"/>
+      <path d="M -40,65 L -35,75 L -30,65 L -35,70 Z"/>
+    </g>
+    
+  </g>
+  
+  <!-- Subtle outer glow -->
+  <circle cx="128" cy="128" r="118" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  
+</svg>

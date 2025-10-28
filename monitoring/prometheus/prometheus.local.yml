@@ -1,0 +1,184 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Application Services
+  - job_name: "auth-service"
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+    metrics_path: "/actuator/prometheus"
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  - job_name: "control-plane"
+    static_configs:
+      - targets: ["host.docker.internal:8082"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "signaling-service"
+    static_configs:
+      - targets: ["host.docker.internal:8083"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "recording-service"
+    static_configs:
+      - targets: ["host.docker.internal:8084"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "chat-service"
+    static_configs:
+      - targets: ["host.docker.internal:8085"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "notification-service"
+    static_configs:
+      - targets: ["host.docker.internal:8086"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "billing-service"
+    static_configs:
+      - targets: ["host.docker.internal:8087"]
+    metrics_path: "/actuator/prometheus"
+    scrape_interval: 10s
+
+  # SFU Workers (mediasoup nodes)
+  - job_name: "sfu-workers"
+    static_configs:
+      - targets:
+          - "host.docker.internal:8088"
+          - "host.docker.internal:8089"
+          - "host.docker.internal:8090"
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+
+  # Infrastructure Services
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+    metrics_path: "/metrics"
+
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: "coturn"
+    static_configs:
+      - targets: ["coturn:9641"]
+    metrics_path: "/metrics"
+
+  # Node Exporter (system metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # Kubernetes metrics (when running in k8s)
+  - job_name: "kubernetes-apiservers"
+    kubernetes_sd_configs:
+      - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels:
+          [
+            __meta_kubernetes_namespace,
+            __meta_kubernetes_service_name,
+            __meta_kubernetes_endpoint_port_name,
+          ]
+        action: keep
+        regex: default;kubernetes;https
+
+  - job_name: "kubernetes-nodes"
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+
+  - job_name: "kubernetes-pods"
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels:
+          [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+# Custom recording rules
+recording_rules:
+  - name: origo_stack_rules
+    rules:
+      # Request rate
+      - record: origo:http_requests_per_second
+        expr: rate(http_requests_total[5m])
+
+      # Error rate
+      - record: origo:http_error_rate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])
+
+      # Response time percentiles
+      - record: origo:http_response_time_p95
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: origo:http_response_time_p99
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+
+      # Media quality metrics
+      - record: origo:media_packet_loss_rate
+        expr: rate(media_packets_lost_total[5m]) / rate(media_packets_sent_total[5m])
+
+      - record: origo:media_jitter_avg
+        expr: avg(media_jitter_seconds) by (room_id, user_id)
+
+      # Active sessions
+      - record: origo:active_sessions
+        expr: sum(websocket_connections_active) by (service)
+
+      # Resource utilization
+      - record: origo:cpu_usage_percent
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      - record: origo:memory_usage_percent
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100

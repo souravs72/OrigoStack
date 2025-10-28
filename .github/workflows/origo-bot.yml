@@ -45,14 +45,47 @@ jobs:
           # Risk assessment logic
           RISK_LEVEL="low"
           AREAS=()
+          
+          # Check if this is a development setup PR
+          SETUP_INDICATORS=$(echo "$CHANGED_FILES" | grep -E "(setup-local\.sh|docker-compose\.local\.yml|scripts/development/|scripts/database/init\.sql|\.env\.local|README\.md|CONTRIBUTING\.md)" | wc -l)
+          WORKFLOW_COUNT=$(echo "$CHANGED_FILES" | grep -E "\.github/workflows/" | wc -l)
+          TOTAL_FILES=$(echo "$CHANGED_FILES" | wc -l)
+          
+          # Calculate setup ratio
+          SETUP_RATIO=0
+          if [ "$TOTAL_FILES" -gt 0 ]; then
+            SETUP_RATIO=$((SETUP_INDICATORS * 100 / TOTAL_FILES))
+          fi
+          
+          # Check for setup/development PR patterns
+          IS_SETUP_PR=false
+          if [ "$SETUP_RATIO" -gt 60 ] || echo "$CHANGED_FILES" | grep -q "origo-bot"; then
+            IS_SETUP_PR=true
+          fi
 
-          # Check for critical files
-          if echo "$CHANGED_FILES" | grep -E "(services/auth-service|services/sfu-cluster|infrastructure|\.github/workflows)" > /dev/null; then
-            RISK_LEVEL="critical"
-          elif echo "$CHANGED_FILES" | grep -E "(services/control-plane|services/billing|services/recording|docker-compose)" > /dev/null; then
-            RISK_LEVEL="high"
-          elif echo "$CHANGED_FILES" | grep -E "(services/chat-service|services/notification|frontend)" > /dev/null; then
-            RISK_LEVEL="medium"
+          # Apply risk assessment with setup consideration
+          if [ "$IS_SETUP_PR" = true ]; then
+            # For setup PRs, reduce risk by one level
+            if echo "$CHANGED_FILES" | grep -E "(services/auth-service|services/sfu-cluster)" > /dev/null; then
+              RISK_LEVEL="high"  # Normally critical, reduced to high
+            elif echo "$CHANGED_FILES" | grep -E "(infrastructure/terraform|infrastructure/kubernetes)" > /dev/null; then
+              RISK_LEVEL="high"  # Normally critical, reduced to high  
+            elif echo "$CHANGED_FILES" | grep -E "(\.github/workflows|docker-compose|scripts/database)" > /dev/null; then
+              RISK_LEVEL="medium"  # Normally high/critical, reduced to medium
+            elif echo "$CHANGED_FILES" | grep -E "(services/control-plane|services/billing|services/recording)" > /dev/null; then
+              RISK_LEVEL="medium"  # Normally high, reduced to medium
+            else
+              RISK_LEVEL="low"
+            fi
+          else
+            # Standard risk assessment for non-setup PRs
+            if echo "$CHANGED_FILES" | grep -E "(services/auth-service|services/sfu-cluster|infrastructure|\.github/workflows)" > /dev/null; then
+              RISK_LEVEL="critical"
+            elif echo "$CHANGED_FILES" | grep -E "(services/control-plane|services/billing|services/recording|docker-compose)" > /dev/null; then
+              RISK_LEVEL="high"
+            elif echo "$CHANGED_FILES" | grep -E "(services/chat-service|services/notification|frontend)" > /dev/null; then
+              RISK_LEVEL="medium"
+            fi
           fi
 
           # Determine areas
@@ -69,9 +102,11 @@ jobs:
 
           echo "risk_level=$RISK_LEVEL" >> $GITHUB_OUTPUT
           echo "areas=${AREAS[*]}" >> $GITHUB_OUTPUT
+          echo "is_setup_pr=$IS_SETUP_PR" >> $GITHUB_OUTPUT
 
           echo "Origo: Risk Level = $RISK_LEVEL"
           echo "Origo: Areas = ${AREAS[*]}"
+          echo "Origo: Setup PR Detection = $IS_SETUP_PR"
 
       - name: Apply risk and area labels
         uses: actions/github-script@v7
@@ -97,13 +132,7 @@ jobs:
           script: |
             const riskLevel = '${{ steps.analysis.outputs.risk_level }}';
             const areas = '${{ steps.analysis.outputs.areas }}'.split(' ').filter(Boolean);
-
-            const riskEmoji = {
-              'low': '🟢',
-              'medium': '🟡', 
-              'high': '🟠',
-              'critical': '🔴'
-            };
+            const isSetupPr = '${{ steps.analysis.outputs.is_setup_pr }}' === 'true';
 
             const approvalRequirements = {
               'low': '1 peer reviewer',
@@ -112,13 +141,17 @@ jobs:
               'critical': 'Security Lead + SRE Lead + SFU Expert'
             };
 
+            const setupNote = isSetupPr ? `
+
+            **Setup PR Detected:** This appears to be a development environment setup or bot configuration PR. Risk level has been adjusted accordingly (reduced by one level from standard assessment).` : '';
+
             const comment = `## Origo Risk Assessment
 
             **Risk Level: ${riskLevel.toUpperCase()}**
 
             **Areas Affected:** ${areas.join(', ') || 'general'}
 
-            **Approval Requirements:** ${approvalRequirements[riskLevel]}
+            **Approval Requirements:** ${approvalRequirements[riskLevel]}${setupNote}
 
             **Automated Checks:**
             - Risk assessment completed

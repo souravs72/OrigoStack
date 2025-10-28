@@ -1,149 +1,150 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Professional gradient scheme -->
-    <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#3b82f6;stop-opacity:1" />
+    <!-- Sweet pastel gradient -->
+    <linearGradient id="bodyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#e2e8f0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#cbd5e1;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Soft blue for accents -->
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#60a5fa;stop-opacity:1" />
     </linearGradient>
     
-    <!-- Secondary gradient for accents -->
-    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#10b981;stop-opacity:1" />
-    </linearGradient>
+    <!-- Warm pink for cheeks -->
+    <radialGradient id="cheekGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#f59e0b;stop-opacity:0.2" />
+    </radialGradient>
     
-    <!-- Subtle glow effect -->
+    <!-- Gentle shadow -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="rgba(0,0,0,0.15)"/>
+    </filter>
+    
+    <!-- Soft glow -->
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
       <feMerge> 
         <feMergeNode in="coloredBlur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    
-    <!-- Professional shadow -->
-    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.25)"/>
-    </filter>
   </defs>
   
-  <!-- Background circle with gradient -->
-  <circle cx="128" cy="128" r="118" fill="url(#primaryGradient)" filter="url(#shadow)" opacity="0.95"/>
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="115" fill="url(#accentGradient)" filter="url(#shadow)" opacity="0.9"/>
   
-  <!-- Outer ring -->
-  <circle cx="128" cy="128" r="118" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
-  
-  <!-- Main bot head structure -->
+  <!-- Robot positioned center -->
   <g transform="translate(128,128)">
     
-    <!-- Bot head -->
-    <rect x="-45" y="-55" width="90" height="70" rx="12" ry="12" fill="rgba(255,255,255,0.95)" filter="url(#shadow)"/>
+    <!-- Cute robot head (bigger for cuteness) -->
+    <ellipse cx="0" cy="-15" rx="55" ry="50" fill="url(#bodyGradient)" filter="url(#shadow)"/>
     
-    <!-- Screen/face area -->
-    <rect x="-35" y="-45" width="70" height="50" rx="8" ry="8" fill="#1f2937"/>
+    <!-- Head outline -->
+    <ellipse cx="0" cy="-15" rx="55" ry="50" fill="none" stroke="rgba(59,130,246,0.3)" stroke-width="2"/>
     
-    <!-- Eyes/status indicators -->
-    <circle cx="-18" cy="-30" r="8" fill="url(#accentGradient)" filter="url(#glow)"/>
-    <circle cx="18" cy="-30" r="8" fill="url(#accentGradient)" filter="url(#glow)"/>
-    
-    <!-- Eye highlights -->
-    <circle cx="-18" cy="-32" r="3" fill="rgba(255,255,255,0.8)"/>
-    <circle cx="18" cy="-32" r="3" fill="rgba(255,255,255,0.8)"/>
-    
-    <!-- Data visualization bars -->
-    <g opacity="0.7">
-      <rect x="-25" y="-10" width="4" height="12" fill="url(#accentGradient)"/>
-      <rect x="-18" y="-15" width="4" height="17" fill="url(#accentGradient)"/>
-      <rect x="-11" y="-8" width="4" height="10" fill="url(#accentGradient)"/>
-      <rect x="-4" y="-12" width="4" height="14" fill="url(#accentGradient)"/>
-      <rect x="3" y="-9" width="4" height="11" fill="url(#accentGradient)"/>
-      <rect x="10" y="-14" width="4" height="16" fill="url(#accentGradient)"/>
-      <rect x="17" y="-11" width="4" height="13" fill="url(#accentGradient)"/>
+    <!-- Antenna with bobbles -->
+    <g stroke="#3b82f6" stroke-width="3" fill="#3b82f6">
+      <line x1="-15" y1="-65" x2="-15" y2="-45"/>
+      <line x1="15" y1="-65" x2="15" y2="-45"/>
+      <circle cx="-15" cy="-68" r="4" filter="url(#glow)"/>
+      <circle cx="15" cy="-68" r="4" filter="url(#glow)"/>
     </g>
     
-    <!-- Bot body/chest -->
-    <rect x="-35" y="25" width="70" height="45" rx="8" ry="8" fill="rgba(255,255,255,0.9)" filter="url(#shadow)"/>
-    
-    <!-- Control panel -->
-    <rect x="-25" y="35" width="50" height="25" rx="4" ry="4" fill="#374151"/>
-    
-    <!-- Status LEDs -->
-    <circle cx="-15" cy="42" r="3" fill="#ef4444"/>
-    <circle cx="-5" cy="42" r="3" fill="#f59e0b"/>
-    <circle cx="5" cy="42" r="3" fill="url(#accentGradient)"/>
-    <circle cx="15" cy="42" r="3" fill="url(#accentGradient)"/>
-    
-    <!-- Network connection lines -->
-    <g stroke="rgba(255,255,255,0.6)" stroke-width="2" fill="none">
-      <!-- Horizontal connections -->
-      <line x1="-80" y1="-20" x2="-45" y2="-20"/>
-      <line x1="45" y1="-20" x2="80" y2="-20"/>
-      <line x1="-80" y1="20" x2="-35" y2="20"/>
-      <line x1="35" y1="20" x2="80" y2="20"/>
+    <!-- Big cute eyes -->
+    <g>
+      <!-- Eye whites -->
+      <ellipse cx="-20" cy="-25" rx="12" ry="15" fill="white"/>
+      <ellipse cx="20" cy="-25" rx="12" ry="15" fill="white"/>
       
-      <!-- Vertical connections -->
-      <line x1="-20" y1="-85" x2="-20" y2="-55"/>
-      <line x1="20" y1="-85" x2="20" y2="-55"/>
-      <line x1="0" y1="70" x2="0" y2="90"/>
-    </g>
-    
-    <!-- Network nodes -->
-    <g fill="rgba(255,255,255,0.8)">
-      <circle cx="-80" cy="-20" r="4"/>
-      <circle cx="80" cy="-20" r="4"/>
-      <circle cx="-80" cy="20" r="4"/>
-      <circle cx="80" cy="20" r="4"/>
-      <circle cx="-20" cy="-85" r="4"/>
-      <circle cx="20" cy="-85" r="4"/>
-      <circle cx="0" cy="90" r="4"/>
-    </g>
-    
-    <!-- Microservices pods -->
-    <g fill="url(#accentGradient)" opacity="0.8">
-      <rect x="-85" y="-25" width="8" height="8" rx="2"/>
-      <rect x="77" y="-25" width="8" height="8" rx="2"/>
-      <rect x="-85" y="15" width="8" height="8" rx="2"/>
-      <rect x="77" y="15" width="8" height="8" rx="2"/>
-      <rect x="-25" y="-90" width="8" height="8" rx="2"/>
-      <rect x="15" y="-90" width="8" height="8" rx="2"/>
-      <rect x="-5" y="85" width="8" height="8" rx="2"/>
-    </g>
-    
-    <!-- Automation symbols -->
-    <g stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none">
-      <!-- Gear 1 -->
-      <g transform="translate(-60,-60) scale(0.8)">
-        <circle cx="0" cy="0" r="12"/>
-        <circle cx="0" cy="0" r="6"/>
-        <rect x="-2" y="-16" width="4" height="8"/>
-        <rect x="-2" y="8" width="4" height="8"/>
-        <rect x="-16" y="-2" width="8" height="4"/>
-        <rect x="8" y="-2" width="8" height="4"/>
-      </g>
+      <!-- Eye pupils -->
+      <ellipse cx="-18" cy="-22" rx="8" ry="10" fill="#1e293b"/>
+      <ellipse cx="22" cy="-22" rx="8" ry="10" fill="#1e293b"/>
       
-      <!-- Gear 2 -->
-      <g transform="translate(60,-60) scale(0.8)">
-        <circle cx="0" cy="0" r="12"/>
-        <circle cx="0" cy="0" r="6"/>
-        <rect x="-2" y="-16" width="4" height="8"/>
-        <rect x="-2" y="8" width="4" height="8"/>
-        <rect x="-16" y="-2" width="8" height="4"/>
-        <rect x="8" y="-2" width="8" height="4"/>
-      </g>
+      <!-- Eye sparkles -->
+      <circle cx="-15" cy="-27" r="3" fill="white"/>
+      <circle cx="25" cy="-27" r="3" fill="white"/>
+      <circle cx="-20" cy="-20" r="1.5" fill="white"/>
+      <circle cx="20" cy="-20" r="1.5" fill="white"/>
     </g>
     
-    <!-- Data flow arrows -->
-    <g stroke="url(#accentGradient)" stroke-width="2" fill="url(#accentGradient)" opacity="0.6">
-      <path d="M -65,-40 L -55,-35 L -65,-30 L -60,-35 Z"/>
-      <path d="M 55,-40 L 65,-35 L 55,-30 L 60,-35 Z"/>
-      <path d="M -40,65 L -35,75 L -30,65 L -35,70 Z"/>
+    <!-- Cute blush cheeks -->
+    <ellipse cx="-45" cy="-10" rx="8" ry="6" fill="url(#cheekGradient)"/>
+    <ellipse cx="45" cy="-10" rx="8" ry="6" fill="url(#cheekGradient)"/>
+    
+    <!-- Happy smile -->
+    <path d="M -15,-5 Q 0,8 15,-5" stroke="#64748b" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Small cute nose dot -->
+    <circle cx="0" cy="-12" r="2" fill="#94a3b8"/>
+    
+    <!-- Robot body (smaller than head) -->
+    <rect x="-35" y="35" width="70" height="55" rx="20" ry="20" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    
+    <!-- Body outline -->
+    <rect x="-35" y="35" width="70" height="55" rx="20" ry="20" fill="none" stroke="rgba(59,130,246,0.3)" stroke-width="2"/>
+    
+    <!-- Cute heart on chest -->
+    <g transform="translate(0,58) scale(0.8)">
+      <path d="M 0,8 C -8,0 -16,0 -16,8 C -16,16 0,24 0,24 S 16,16 16,8 C 16,0 8,0 0,8" fill="#ef4444" opacity="0.7"/>
+    </g>
+    
+    <!-- Cute little buttons -->
+    <circle cx="-15" cy="75" r="4" fill="#10b981"/>
+    <circle cx="0" cy="75" r="4" fill="#f59e0b"/>
+    <circle cx="15" cy="75" r="4" fill="#8b5cf6"/>
+    
+    <!-- Stubby cute arms -->
+    <ellipse cx="-50" cy="50" rx="8" ry="20" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    <ellipse cx="50" cy="50" rx="8" ry="20" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    
+    <!-- Cute little hands -->
+    <circle cx="-50" cy="72" r="10" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    <circle cx="50" cy="72" r="10" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    
+    <!-- Little fingers -->
+    <g fill="#94a3b8">
+      <circle cx="-53" cy="68" r="2"/>
+      <circle cx="-47" cy="68" r="2"/>
+      <circle cx="-53" cy="76" r="2"/>
+      <circle cx="-47" cy="76" r="2"/>
+      
+      <circle cx="47" cy="68" r="2"/>
+      <circle cx="53" cy="68" r="2"/>
+      <circle cx="47" cy="76" r="2"/>
+      <circle cx="53" cy="76" r="2"/>
+    </g>
+    
+    <!-- Cute little legs -->
+    <ellipse cx="-18" cy="105" rx="10" ry="15" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    <ellipse cx="18" cy="105" rx="10" ry="15" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    
+    <!-- Adorable feet -->
+    <ellipse cx="-18" cy="125" rx="12" ry="8" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    <ellipse cx="18" cy="125" rx="12" ry="8" fill="url(#bodyGradient)" filter="url(#shadow)"/>
+    
+    <!-- Sparkles around the bot for extra cuteness -->
+    <g fill="#fbbf24" opacity="0.6">
+      <path d="M -80,-30 L -85,-35 L -80,-40 L -75,-35 Z"/>
+      <path d="M 80,-30 L 85,-35 L 80,-40 L 75,-35 Z"/>
+      <path d="M -70,80 L -75,75 L -70,70 L -65,75 Z"/>
+      <path d="M 70,80 L 75,75 L 70,70 L 65,75 Z"/>
+      
+      <!-- Small sparkles -->
+      <circle cx="-90" cy="10" r="2"/>
+      <circle cx="90" cy="10" r="2"/>
+      <circle cx="-60" cy="-70" r="1.5"/>
+      <circle cx="60" cy="-70" r="1.5"/>
+      <circle cx="0" cy="-90" r="2"/>
     </g>
     
   </g>
   
-  <!-- Subtle outer glow -->
-  <circle cx="128" cy="128" r="118" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <!-- Outer glow ring -->
+  <circle cx="128" cy="128" r="115" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
   
 </svg>

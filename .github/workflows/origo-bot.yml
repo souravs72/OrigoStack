@@ -33,7 +33,7 @@ jobs:
         with:
           app-id: ${{ secrets.ORIGO_APP_ID }}
           private-key: ${{ secrets.ORIGO_PRIVATE_KEY }}
-          
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:

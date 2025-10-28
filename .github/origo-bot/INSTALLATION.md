@@ -60,6 +60,7 @@ Webhook URL: https://github.com/souravs72/OrigoStack/settings/hooks
 ### 4. Install on Repository
 
 **Option A - From App Settings:**
+
 1. Go to: https://github.com/settings/apps
 2. Click on **"sourav72"** app
 3. Click **"Install App"**
@@ -69,6 +70,7 @@ Webhook URL: https://github.com/souravs72/OrigoStack/settings/hooks
 
 **Option B - Direct Installation URL:**
 Go to: **https://github.com/apps/sourav72/installations/new**
+
 1. Select **"Only select repositories"**
 2. Choose: **souravs72/OrigoStack**
 3. Click **"Install"**
@@ -79,10 +81,10 @@ Go to: **https://github.com/souravs72/OrigoStack/settings/secrets/actions**
 
 Add these secrets:
 
-| Secret Name             | How to Get                                                                |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `ORIGO_APP_ID`          | App Settings → General → About section                                    |
-| `ORIGO_PRIVATE_KEY`     | App Settings → Private keys → Generate new key                            |
+| Secret Name             | How to Get                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `ORIGO_APP_ID`          | App Settings → General → About section                                       |
+| `ORIGO_PRIVATE_KEY`     | App Settings → Private keys → Generate new key                               |
 | `ORIGO_INSTALLATION_ID` | https://github.com/settings/installations → Click sourav72 → Get ID from URL |
 
 ### 6. Verify Installation

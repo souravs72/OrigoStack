@@ -1,0 +1,69 @@
+# Origo - Production Microservices Automation Bot
+# Enterprise-grade GitHub App for Origo Stack platform
+
+name: "Origo"
+description: "Production-grade automation bot for Origo Stack microservices platform. Handles risk assessment, quality gates, canary deployments, and SLO monitoring."
+url: "https://github.com/souravs72/OrigoStack"
+setup_url: "https://github.com/souravs72/OrigoStack/wiki/Origo-Bot-Setup"
+
+# Comprehensive permissions for production automation
+default_permissions:
+  # Repository management
+  contents: write
+  metadata: read
+  pull_requests: write
+  issues: write
+  checks: write
+  statuses: write
+  
+  # CI/CD and deployments  
+  actions: write
+  deployments: write
+  environments: write
+  
+  # Security and analysis
+  security_events: write
+  vulnerability_alerts: read
+  
+  # Administration
+  administration: read
+  members: read
+  
+default_events:
+  # PR and code review automation
+  - pull_request
+  - pull_request_review
+  - pull_request_review_comment
+  
+  # Issue and project management
+  - issues
+  - issue_comment
+  
+  # CI/CD pipeline events
+  - check_run
+  - check_suite
+  - workflow_run
+  - deployment
+  - deployment_status
+  
+  # Security monitoring
+  - security_advisory
+  - code_scanning_alert
+  - dependabot_alert
+  
+  # Release management
+  - release
+  - create
+  - push
+  
+  # Repository events
+  - repository
+  - repository_vulnerability_alert
+
+# Bot configuration
+public: false
+redirect_url: "https://github.com/souravs72/OrigoStack/settings/hooks"
+
+# Enterprise features
+request_oauth_on_install: false
+setup_on_update: true

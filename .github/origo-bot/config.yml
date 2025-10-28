@@ -1,0 +1,208 @@
+# Origo Bot Configuration - Production Automation
+# Implements all requirements from .cursor/rules.md
+
+origo:
+  version: "1.0.0"
+  name: "Origo"
+  description: "Enterprise automation for Origo Stack microservices platform"
+  
+  # Risk-based automation per rules.md
+  risk_assessment:
+    enabled: true
+    auto_label: true
+    
+    # Risk calculation matrix
+    risk_factors:
+      # Files that trigger different risk levels
+      critical_files:
+        - "services/auth-service/**"
+        - "services/sfu-cluster/**" 
+        - "infrastructure/terraform/**"
+        - "infrastructure/kubernetes/**"
+        - "scripts/database/migrations/**"
+        - ".github/workflows/**"
+        
+      high_files:
+        - "services/control-plane/**"
+        - "services/billing-service/**"
+        - "services/recording-service/**"
+        - "docker-compose*.yml"
+        - "monitoring/**"
+        
+      medium_files:
+        - "services/chat-service/**"
+        - "services/notification-service/**"
+        - "frontend/**"
+        - "docs/api/**"
+        
+      # File patterns that increase risk
+      security_patterns:
+        - "**/*auth*"
+        - "**/*security*" 
+        - "**/*secret*"
+        - "**/*key*"
+        - "**/*token*"
+        
+      infrastructure_patterns:
+        - "**/Dockerfile*"
+        - "**/helm/**"
+        - "**/k8s/**"
+        - "**/deploy*"
+
+  # Automated quality gates per rules.md
+  quality_gates:
+    enabled: true
+    
+    # Files-to-read-before-change rule enforcement
+    files_analysis:
+      enabled: true
+      require_impact_report: true
+      static_analysis_tools:
+        - "ripgrep" # for reference search
+        - "ast-grep" # for AST analysis
+        - "dependency-check" # for impact analysis
+        
+    # Test matrix enforcement
+    testing:
+      unit_tests:
+        required: true
+        coverage_threshold: 80
+        new_code_coverage: 100
+        
+      integration_tests:
+        required_for_risk: ["medium", "high", "critical"]
+        timeout_minutes: 30
+        
+      e2e_tests:
+        required_for_risk: ["high", "critical"]
+        run_on_schedule: "nightly"
+        
+      security_scans:
+        trivy_enabled: true
+        block_on: ["HIGH", "CRITICAL"]
+        dependency_check: true
+
+  # Approval workflow automation
+  approval_matrix:
+    enabled: true
+    
+    # Per rules.md approval requirements
+    rules:
+      critical:
+        required_reviewers: ["security-lead", "sre-lead", "sfu-expert"]
+        min_approvals: 3
+        dismiss_stale_reviews: true
+        
+      high:
+        required_reviewers: ["security-lead", "sre-lead", "sfu-expert"] 
+        min_approvals: 3
+        dismiss_stale_reviews: true
+        
+      medium:
+        required_teams: ["core-team"]
+        min_approvals: 2
+        require_owner_approval: true
+        
+      low:
+        min_approvals: 1
+        auto_merge_after_hours: 1
+        
+    # Auto-assign reviewers based on area
+    auto_assignment:
+      "area:sfu": ["sfu-expert"]
+      "area:auth": ["security-lead"]
+      "area:infra": ["sre-lead"]
+      "area:billing": ["backend-team"]
+
+  # Deployment automation per rules.md
+  deployments:
+    canary:
+      enabled: true
+      initial_percent: 5
+      monitor_window_minutes: 20
+      promotion_stages: [5, 25, 50, 100]
+      
+    rollback:
+      auto_rollback_on_slo_breach: true
+      rollback_window_minutes: 5
+      
+    environments:
+      staging:
+        auto_deploy_on_merge: true
+        branch: "staging"
+        
+      production:
+        require_manual_approval: true
+        canary_required: true
+
+  # SLO monitoring and alerting
+  monitoring:
+    enabled: true
+    
+    slo_thresholds:
+      error_rate: 0.1  # 0.1% error rate
+      p95_latency_ms: 500
+      availability: 99.9
+      
+    auto_rollback_triggers:
+      - "error_rate > 1.0"
+      - "p95_latency_ms > 1000" 
+      - "availability < 99.0"
+      
+    notification_channels:
+      slack: "#origo-alerts"
+      email: "on-call@company.com"
+
+  # Documentation enforcement
+  documentation:
+    changelog_required: true
+    changelog_path: "docs/ChangeLog.md"
+    
+    pr_template_enforcement:
+      require_description: true
+      require_testing_section: true
+      require_rollback_plan: true
+      
+    architecture_updates:
+      auto_detect_changes: true
+      require_adr_for_critical: true
+
+  # Security automation
+  security:
+    secrets_scanning: true
+    dependency_updates:
+      auto_merge_patch: true
+      auto_create_pr_minor: true
+      require_approval_major: true
+      
+    vulnerability_management:
+      block_critical: true
+      auto_create_issues: true
+      
+  # Performance and cost monitoring
+  performance:
+    egress_cost_monitoring: true
+    resource_usage_alerts: true
+    performance_regression_detection: true
+
+# Integration settings
+integrations:
+  prometheus:
+    enabled: true
+    endpoint: "http://prometheus:9090"
+    
+  grafana:
+    enabled: true
+    dashboard_auto_update: true
+    
+  jaeger:
+    enabled: true
+    trace_analysis: true
+    
+  slack:
+    enabled: true
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    
+  email:
+    enabled: true
+    smtp_config: "${EMAIL_CONFIG}"

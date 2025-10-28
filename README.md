@@ -1,4 +1,4 @@
-# Origo Stack — Production-Grade Zoom-like Microservices Platform
+# Origo Stack 
 
 ## Overview
 

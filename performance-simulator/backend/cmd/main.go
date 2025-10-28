@@ -137,6 +137,13 @@ func setupRoutes(simEngine *simulator.Engine, wsHub *websocket.Hub, metricsColle
 		// Service profiles
 		api.GET("/services", simEngine.GetServiceProfiles)
 		api.POST("/services", simEngine.CreateServiceProfile)
+		
+		// Testing endpoints
+		api.POST("/test-connection", simEngine.TestConnection)
+		api.POST("/auth/test", simEngine.TestAuth)
+		
+		// Variable management
+		api.GET("/variables", simEngine.GetAvailableVariables)
 	}
 
 	// WebSocket endpoint for real-time data

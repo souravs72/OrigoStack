@@ -22,6 +22,8 @@ type Engine struct {
 	db               *gorm.DB
 	metricsCollector *metrics.Collector
 	wsHub            *websocket.Hub
+	authManager      *AuthManager
+	varResolver      *VariableResolver
 	activeSimulations sync.Map
 	simulationCounter int64
 }
@@ -33,7 +35,9 @@ type SimulationConfig struct {
 	TargetURL        string            `json:"target_url"`
 	Method           string            `json:"method"`
 	Headers          map[string]string `json:"headers"`
-	Body             string            `json:"body"`
+	Body             *RequestBody      `json:"body"`
+	Auth             *AuthConfig       `json:"auth"`
+	ContentType      string            `json:"content_type"`
 	MaxRPS           int64             `json:"max_rps"`           // Changed to int64 for millions of RPS
 	MinRPS           int64             `json:"min_rps"`           // Starting RPS (default: 1)
 	Duration         time.Duration     `json:"duration"`
@@ -105,6 +109,8 @@ func NewEngine(db *gorm.DB, metricsCollector *metrics.Collector, wsHub *websocke
 		db:               db,
 		metricsCollector: metricsCollector,
 		wsHub:            wsHub,
+		authManager:      NewAuthManager(),
+		varResolver:      NewVariableResolver(),
 		simulationCounter: 0,
 	}
 }
@@ -129,6 +135,18 @@ func (e *Engine) StartSimulation(c *gin.Context) {
 	// Create simulation context
 	ctx, cancel := context.WithTimeout(context.Background(), config.Duration)
 	
+	// Set up authentication configuration
+	if config.Auth != nil {
+		e.authManager.SetAuthConfig(config.ID, config.Auth)
+	}
+	
+	// Create HTTP client with authentication support
+	client, err := e.authManager.CreateHTTPClientWithAuth(config.Auth)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create HTTP client: " + err.Error()})
+		return
+	}
+	
 	// Initialize simulation
 	sim := &Simulation{
 		config: &config,
@@ -140,9 +158,7 @@ func (e *Engine) StartSimulation(c *gin.Context) {
 		},
 		ctx:    ctx,
 		cancel: cancel,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client: client,
 		responseTimes: make([]time.Duration, 0, 10000),
 		timeSeries: &TimeSeriesMetrics{
 			SimulationID: config.ID,
@@ -224,6 +240,29 @@ func (e *Engine) runSimulation(sim *Simulation) {
 	}
 }
 
+// resolveVariables resolves dynamic variables in the simulation configuration
+func (e *Engine) resolveVariables(config *SimulationConfig) *SimulationConfig {
+	resolved := &SimulationConfig{
+		ID:              config.ID,
+		Name:            e.varResolver.Resolve(config.Name),
+		TargetURL:       e.varResolver.Resolve(config.TargetURL),
+		Method:          config.Method,
+		Headers:         config.Headers, // Will be resolved later
+		Body:            e.varResolver.ResolveBody(config.Body),
+		Auth:            config.Auth,
+		ContentType:     e.varResolver.Resolve(config.ContentType),
+		MaxRPS:          config.MaxRPS,
+		MinRPS:          config.MinRPS,
+		Duration:        config.Duration,
+		ConcurrentUsers: config.ConcurrentUsers,
+		RampUpTime:      config.RampUpTime,
+		Pattern:         config.Pattern,
+		ScaleMode:       config.ScaleMode,
+		SampleInterval:  config.SampleInterval,
+	}
+	return resolved
+}
+
 // executeRequest performs a single HTTP request
 func (e *Engine) executeRequest(sim *Simulation, workerPool <-chan struct{}, wg *sync.WaitGroup) {
 	defer func() {
@@ -233,16 +272,40 @@ func (e *Engine) executeRequest(sim *Simulation, workerPool <-chan struct{}, wg 
 
 	startTime := time.Now()
 	
-	// Create HTTP request
-	req, err := http.NewRequestWithContext(sim.ctx, sim.config.Method, sim.config.TargetURL, nil)
+	// Resolve variables in configuration
+	resolvedConfig := e.resolveVariables(sim.config)
+	
+	// Build request body
+	body, contentType, err := e.buildRequestBody(resolvedConfig)
+	if err != nil {
+		atomic.AddInt64(&sim.errorCount, 1)
+		logrus.Debugf("Failed to build request body: %v", err)
+		return
+	}
+
+	// Create HTTP request with body
+	req, err := http.NewRequestWithContext(sim.ctx, resolvedConfig.Method, resolvedConfig.TargetURL, body)
 	if err != nil {
 		atomic.AddInt64(&sim.errorCount, 1)
 		return
 	}
 
-	// Add headers
-	for key, value := range sim.config.Headers {
+	// Set Content-Type if we have one
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	// Add resolved headers
+	resolvedHeaders := e.varResolver.ResolveHeaders(resolvedConfig.Headers)
+	for key, value := range resolvedHeaders {
 		req.Header.Set(key, value)
+	}
+
+	// Apply authentication
+	if err := e.authManager.ApplyAuth(req, sim.status.ID); err != nil {
+		atomic.AddInt64(&sim.errorCount, 1)
+		logrus.Debugf("Authentication failed: %v", err)
+		return
 	}
 
 	// Execute request
@@ -535,6 +598,65 @@ func (e *Engine) validateConfig(config *SimulationConfig) error {
 	if config.ConcurrentUsers <= 0 {
 		return fmt.Errorf("concurrent users must be greater than 0")
 	}
+
+	// Validate request body
+	if err := e.validateBody(config); err != nil {
+		return fmt.Errorf("body validation failed: %v", err)
+	}
+
+	// Validate authentication configuration
+	if config.Auth != nil {
+		if err := e.validateAuth(config.Auth); err != nil {
+			return fmt.Errorf("auth validation failed: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// validateAuth validates authentication configuration
+func (e *Engine) validateAuth(auth *AuthConfig) error {
+	switch auth.Type {
+	case AuthTypeNone:
+		return nil
+		
+	case AuthTypeBearer:
+		if auth.BearerToken == nil || auth.BearerToken.Token == "" {
+			return fmt.Errorf("bearer token is required")
+		}
+		
+	case AuthTypeBasic:
+		if auth.BasicAuth == nil || auth.BasicAuth.Username == "" || auth.BasicAuth.Password == "" {
+			return fmt.Errorf("username and password are required for basic auth")
+		}
+		
+	case AuthTypeAPIKey:
+		if auth.APIKey == nil || auth.APIKey.Key == "" || auth.APIKey.Value == "" {
+			return fmt.Errorf("API key name and value are required")
+		}
+		if auth.APIKey.Location != "header" && auth.APIKey.Location != "query" {
+			return fmt.Errorf("API key location must be 'header' or 'query'")
+		}
+		
+	case AuthTypeJWT:
+		if auth.JWT == nil || auth.JWT.Token == "" {
+			return fmt.Errorf("JWT token is required")
+		}
+		
+	case AuthTypeOAuth2:
+		if auth.OAuth2 == nil || auth.OAuth2.ClientID == "" || auth.OAuth2.ClientSecret == "" || auth.OAuth2.TokenURL == "" {
+			return fmt.Errorf("OAuth2 client credentials and token URL are required")
+		}
+		
+	case AuthTypeClientCert:
+		if auth.ClientCert == nil || auth.ClientCert.CertFile == "" || auth.ClientCert.KeyFile == "" {
+			return fmt.Errorf("client certificate and key files are required")
+		}
+		
+	default:
+		return fmt.Errorf("unsupported auth type: %s", auth.Type)
+	}
+	
 	return nil
 }
 
@@ -953,5 +1075,210 @@ func (e *Engine) CreateServiceProfile(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Service profile created successfully",
 		"profile": profile,
+	})
+}
+
+// TestConnection tests connectivity to a target URL with authentication
+func (e *Engine) TestConnection(c *gin.Context) {
+	var testConfig struct {
+		TargetURL string     `json:"target_url"`
+		Method    string     `json:"method"`
+		Headers   map[string]string `json:"headers"`
+		Auth      *AuthConfig `json:"auth"`
+		Timeout   int        `json:"timeout"`
+	}
+
+	if err := c.ShouldBindJSON(&testConfig); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid test configuration: " + err.Error()})
+		return
+	}
+
+	// Set defaults
+	if testConfig.Method == "" {
+		testConfig.Method = "GET"
+	}
+	if testConfig.Timeout == 0 {
+		testConfig.Timeout = 10
+	}
+
+	// Create HTTP client with authentication
+	client, err := e.authManager.CreateHTTPClientWithAuth(testConfig.Auth)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Failed to create HTTP client: " + err.Error(),
+		})
+		return
+	}
+
+	// Set timeout
+	client.Timeout = time.Duration(testConfig.Timeout) * time.Second
+
+	startTime := time.Now()
+
+	// Create request
+	req, err := http.NewRequest(testConfig.Method, testConfig.TargetURL, nil)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	// Add headers
+	for key, value := range testConfig.Headers {
+		req.Header.Set(key, value)
+	}
+
+	// Apply authentication (using a temporary simulation ID)
+	tempSimID := int64(99999)
+	if testConfig.Auth != nil {
+		e.authManager.SetAuthConfig(tempSimID, testConfig.Auth)
+		if err := e.authManager.ApplyAuth(req, tempSimID); err != nil {
+			e.authManager.ClearAuthConfig(tempSimID)
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"error":   "Authentication failed: " + err.Error(),
+			})
+			return
+		}
+	}
+
+	// Execute request
+	resp, err := client.Do(req)
+	responseTime := time.Since(startTime)
+
+	// Clean up temporary auth config
+	if testConfig.Auth != nil {
+		e.authManager.ClearAuthConfig(tempSimID)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success":      false,
+			"error":        err.Error(),
+			"responseTime": responseTime.String(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read response body (limited)
+	bodyBytes := make([]byte, 1024)
+	n, _ := resp.Body.Read(bodyBytes)
+	responseBody := string(bodyBytes[:n])
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"statusCode":   resp.StatusCode,
+		"responseTime": responseTime.String(),
+		"responseSize": len(responseBody),
+		"headers":      resp.Header,
+		"preview":      responseBody,
+	})
+}
+
+// TestAuth tests authentication configuration
+func (e *Engine) TestAuth(c *gin.Context) {
+	var testConfig struct {
+		AuthType  string     `json:"auth_type"`
+		TargetURL string     `json:"target_url"`
+		Config    *AuthConfig `json:"config"`
+	}
+
+	if err := c.ShouldBindJSON(&testConfig); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid test configuration: " + err.Error()})
+		return
+	}
+
+	if testConfig.TargetURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Target URL is required for auth testing"})
+		return
+	}
+
+	// Validate auth config
+	if err := e.validateAuth(testConfig.Config); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Auth validation failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Create HTTP client with authentication
+	client, err := e.authManager.CreateHTTPClientWithAuth(testConfig.Config)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Failed to create HTTP client: " + err.Error(),
+		})
+		return
+	}
+
+	client.Timeout = 10 * time.Second
+
+	// Create test request
+	req, err := http.NewRequest("GET", testConfig.TargetURL, nil)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Failed to create request: " + err.Error(),
+		})
+		return
+	}
+
+	// Apply authentication (using a temporary simulation ID)
+	tempSimID := int64(99998)
+	e.authManager.SetAuthConfig(tempSimID, testConfig.Config)
+	
+	if err := e.authManager.ApplyAuth(req, tempSimID); err != nil {
+		e.authManager.ClearAuthConfig(tempSimID)
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Authentication failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Execute request
+	startTime := time.Now()
+	resp, err := client.Do(req)
+	responseTime := time.Since(startTime)
+
+	// Clean up temporary auth config
+	e.authManager.ClearAuthConfig(tempSimID)
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success":      false,
+			"error":        err.Error(),
+			"responseTime": responseTime.String(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"statusCode":   resp.StatusCode,
+		"responseTime": responseTime.String(),
+		"message":      fmt.Sprintf("Authentication successful (Status: %d)", resp.StatusCode),
+	})
+}
+
+// GetAvailableVariables returns all available dynamic variables
+func (e *Engine) GetAvailableVariables(c *gin.Context) {
+	variables := e.varResolver.GetAvailableVariables()
+	
+	c.JSON(http.StatusOK, gin.H{
+		"variables": variables,
+		"total":     len(variables),
+		"examples": map[string]string{
+			"Basic usage":     "{{username}} will be replaced with a random username",
+			"In JSON body":    `{"name": "{{full_name}}", "email": "{{email}}"}`,
+			"In headers":      "X-Request-ID: {{uuid}}",
+			"Multiple vars":   "User {{username}} created at {{timestamp}}",
+		},
 	})
 }
